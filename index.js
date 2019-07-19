@@ -1,41 +1,38 @@
 const puppeteer = require('puppeteer');
-const fs  = require('fs');
+const { Cluster } = require('puppeteer-cluster');
+const fs = require('fs');
 
 
 (async () => {
-    const browser = await puppeteer.launch({ headless: true, args:['--no-sandbox'] });
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1920, height: 926 });
-    await page.setRequestInterception(true);
-
-    page.on('request', (req) => {
-        // if(req.resourceType() == 'stylesheet' || req.resourceType() == 'font' || req.resourceType() == 'image' || req.resourceType() == 'script'){
-        //     req.abort();
-        // }
-        // else {
-        //     req.continue();
-        // }
-       if(req.resourceType() == 'document'){
-            req.continue();
-        }
-        else {
-            req.abort();
-        }
+    console.time("tempo");
+    const cluster = await Cluster.launch({
+        concurrency: Cluster.CONCURRENCY_CONTEXT,
+        maxConcurrency: 64,
     });
-    const max = 20;
-    const ongs = [];
-    for (let i=1;i<=max; i++){
-        console.time("tempo");
-        const pageUrl = `http://www.ongsbrasil.com.br/default.asp?Pag=2&CodigoInstituicao=${i}`;
-        // console.log(pageUrl);
 
-        await page.goto(pageUrl);
-        await page.mainFrame().waitForSelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(1) > div > h1',{visible: true})
-        // get ong details
+    const max = 21337;
+    const ongs = [];
+    // task
+    await cluster.task(async ({ page, data: url }) => {
+        console.log(url);
+        // const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+        await page.setViewport({ width: 1920, height: 926 });
+        await page.setRequestInterception(true);
+
+        page.on('request', (req) => {
+            if (req.resourceType() === 'document') {
+                req.continue();
+            }
+            else {
+                req.abort();
+            }
+        });
+
+        await page.goto(url);
+        await page.mainFrame().waitForSelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(1) > div > h1', { visible: true })
         let ongData = await page.evaluate(() => {
             let ongJson = {};
             try {
-
                 ongJson.name = document.querySelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(1) > div > h1').innerText;
                 ongJson.endereco = document.querySelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(4) > div > table > tbody > tr:nth-child(1) > td:nth-child(2) > span').innerText;
                 ongJson.bairro = document.querySelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(4) > div > table > tbody > tr:nth-child(2) > td:nth-child(2) > span').innerText;
@@ -48,19 +45,25 @@ const fs  = require('fs');
                 ongJson.email = document.querySelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(4) > div > table > tbody > tr:nth-child(9) > td:nth-child(2) > input[type="text"]').value;
                 ongJson.site = document.querySelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(4) > div > table > tbody > tr:nth-child(10) > td:nth-child(2) > input[type="text"]').value;
                 ongJson.cnpj = document.querySelector('body > div.container > div > div.col-md-8.col-sm-9.col-xs-12 > div:nth-child(2) > div:nth-child(4) > div > table > tbody > tr:nth-child(11) > td:nth-child(2) > span').innerText;
-                ongJson.fonteUrl = pageUrl;
+                ongJson.fonteUrl = url;
             }
-            catch (exception){
+            catch (exception) {
             }
             return ongJson;
         });
         ongs.push(ongData)
-        // console.dir(ongData);
-        console.timeEnd("tempo");
-    }
-        
-    await fs.writeFile('ongsbrasil.json',JSON.stringify(ongs), function(err){
-        if (err) throw err;
-        console.log('fim');
     });
+
+    for (let i = 1; i <= max; i++) {
+        cluster.queue(`http://www.ongsbrasil.com.br/default.asp?Pag=2&CodigoInstituicao=${i}`);
+    }
+
+    await cluster.idle();
+    await cluster.close();
+    // many more pages
+    await fs.writeFile('ongsbrasil.json', JSON.stringify(ongs), function (err) {
+        if (err) throw err;
+        console.log('Arquivo ongsbrasil.json gerado com sucesso!');
+    });
+    console.timeEnd("tempo");
 })();

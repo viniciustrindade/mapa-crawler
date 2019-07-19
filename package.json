@@ -4,10 +4,13 @@
   "description": "crowl sites",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
   },
   "dependencies": {
-    "puppeteer": "^1.3.0"
+    "puppeteer": "^1.3.0",
+    "puppeteer-cluster": "^0.16.0",
+    "puppeteer-pool": "^1.0.3"
   },
   "author": "vinicius trindade",
   "license": "ISC"
