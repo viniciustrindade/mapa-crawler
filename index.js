@@ -7,6 +7,7 @@ const fs = require('fs');
     console.time("tempo");
     const cluster = await Cluster.launch({
         concurrency: Cluster.CONCURRENCY_CONTEXT,
+        hea
         maxConcurrency: 64,
     });
 
